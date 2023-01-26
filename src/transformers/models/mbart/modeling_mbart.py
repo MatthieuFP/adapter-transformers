@@ -1369,6 +1369,7 @@ class MBartForConditionalGeneration(BartModelWithHeadsAdaptersMixin, MBartPreTra
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        pred_idx: Optional[tuple] = None,
     ) -> Union[Seq2SeqLMOutput, Tuple[torch.FloatTensor]]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
@@ -1410,8 +1411,31 @@ class MBartForConditionalGeneration(BartModelWithHeadsAdaptersMixin, MBartPreTra
 
         masked_lm_loss = None
         if labels is not None:
-            loss_fct = CrossEntropyLoss()
-            masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
+            if pred_idx is None:
+                pred_idx = labels != self.config.pad_token_id
+                lm_logits = lm_logits[pred_idx.unsqueeze(-1).expand_as(lm_logits)].view(-1, lm_logits.size(-1))
+                labels = labels[pred_idx]
+            else:
+                pred_pos = pred_idx[0], pred_idx[1] - 1
+                lm_logits = lm_logits[pred_pos]
+                assert lm_logits.size(0) == labels.size(0), "Labels shape must match lm_logits size"
+
+            if self.config.label_smoothing:
+                smooth_ratio = self.config.label_smoothing
+                confidence = 1 - smooth_ratio
+                smoothing_value = smooth_ratio / (self.config.vocab_size - 2)
+                one_hot = torch.full((self.config.vocab_size,), smoothing_value)
+                one_hot[self.config.pad_token_id] = 0
+                one_hot = one_hot.unsqueeze(0).cuda()
+
+                loss_fct = nn.KLDivLoss(reduction="sum")
+                truth_p = one_hot.repeat(labels.size(0), 1)
+                truth_p.scatter_(1, labels.unsqueeze(1), confidence)
+                truth_p.masked_fill_((labels == self.config.pad_token_id).unsqueeze(1), 0)
+                masked_lm_loss = loss_fct(torch.log_softmax(lm_logits.view(-1, self.config.vocab_size), dim=-1), truth_p) / labels.size(0)
+            else:
+                loss_fct = CrossEntropyLoss()
+                masked_lm_loss = loss_fct(lm_logits.view(-1, self.config.vocab_size), labels.view(-1))
 
         if not return_dict:
             output = (lm_logits,) + outputs[1:]
