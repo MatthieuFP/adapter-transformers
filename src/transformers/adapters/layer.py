@@ -230,7 +230,7 @@ class AdapterLayer(AdapterLayerBase, nn.Module):
                 hidden_states, _, residual = adapter_layer.pre_forward(hidden_states, input_tensor, layer_norm)
                 context = ForwardContext.get_context()
                 layer_output = adapter_layer(
-                    hidden_states, residual_input=residual, output_gating=context.output_adapter_gating_scores
+                    hidden_states, residual_input=residual, # output_gating=context.output_adapter_gating_scores
                 )
                 hidden_states, up = layer_output[0], layer_output[2]
                 self._store_gating_score(adapter_stack_layer, layer_output[-1])
