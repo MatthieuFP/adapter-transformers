@@ -233,7 +233,7 @@ class AdapterLayer(AdapterLayerBase, nn.Module):
                     hidden_states, residual_input=residual, # output_gating=context.output_adapter_gating_scores
                 )
                 hidden_states, up = layer_output[0], layer_output[2]
-                self._store_gating_score(adapter_stack_layer, layer_output[-1])
+                # self._store_gating_score(adapter_stack_layer, layer_output[-1])
                 # as this stack might be part of a fusion block, return the adapter up-projection output here
                 # together with the final output (with potential residuals & norms) if we reached the last block of the stack
                 if i == len(adapter_setup) - 1:
