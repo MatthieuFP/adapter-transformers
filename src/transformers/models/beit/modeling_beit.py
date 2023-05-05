@@ -26,11 +26,6 @@ from torch import nn
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
 from ...activations import ACT2FN
-from ...adapters.context import ForwardContext
-from ...adapters.lora import Linear as LoRALinear
-from ...adapters.mixins.beit import BeitLayerAdaptersMixin, BeitModelAdaptersMixin, BeitModelWithHeadsAdaptersMixin
-from ...adapters.model_mixin import ModelWithHeadsAdaptersMixin
-from ...adapters.prefix_tuning import PrefixTuningShim
 from ...modeling_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPooling,
@@ -214,9 +209,7 @@ class BeitPatchEmbeddings(nn.Module):
 
 
 class BeitSelfAttention(nn.Module):
-    def __init__(
-        self, config: BeitConfig, window_size: Optional[tuple] = None, location_key: Optional[str] = None
-    ) -> None:
+    def __init__(self, config: BeitConfig, window_size: Optional[tuple] = None) -> None:
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
             raise ValueError(
@@ -228,9 +221,9 @@ class BeitSelfAttention(nn.Module):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = LoRALinear(config.hidden_size, self.all_head_size, "selfattn", config, attn_key="q")
-        self.key = LoRALinear(config.hidden_size, self.all_head_size, "selfattn", config, attn_key="k", bias=False)
-        self.value = LoRALinear(config.hidden_size, self.all_head_size, "selfattn", config, attn_key="v")
+        self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.key = nn.Linear(config.hidden_size, self.all_head_size, bias=False)
+        self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
@@ -238,8 +231,6 @@ class BeitSelfAttention(nn.Module):
             self.relative_position_bias = BeitRelativePositionBias(config, window_size=window_size)
         else:
             self.relative_position_bias = None
-
-        self.prefix_tuning = PrefixTuningShim(location_key + "_prefix" if location_key else None, config)
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
@@ -258,8 +249,6 @@ class BeitSelfAttention(nn.Module):
         key_layer = self.transpose_for_scores(self.key(hidden_states))
         value_layer = self.transpose_for_scores(self.value(hidden_states))
         query_layer = self.transpose_for_scores(mixed_query_layer)
-
-        key_layer, value_layer, _ = self.prefix_tuning(key_layer, value_layer, hidden_states)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
@@ -310,15 +299,14 @@ class BeitSelfOutput(nn.Module):
     def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor, gamma=None) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
+
         return hidden_states
 
 
 class BeitAttention(nn.Module):
-    def __init__(
-        self, config: BeitConfig, window_size: Optional[tuple] = None, location_key: Optional[str] = None
-    ) -> None:
+    def __init__(self, config: BeitConfig, window_size: Optional[tuple] = None) -> None:
         super().__init__()
-        self.attention = BeitSelfAttention(config, window_size=window_size, location_key=location_key)
+        self.attention = BeitSelfAttention(config, window_size=window_size)
         self.output = BeitSelfOutput(config)
         self.pruned_heads = set()
 
@@ -358,7 +346,7 @@ class BeitAttention(nn.Module):
 class BeitIntermediate(nn.Module):
     def __init__(self, config: BeitConfig) -> None:
         super().__init__()
-        self.dense = LoRALinear(config.hidden_size, config.intermediate_size, "intermediate", config)
+        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -367,33 +355,31 @@ class BeitIntermediate(nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         hidden_states = self.intermediate_act_fn(hidden_states)
+
         return hidden_states
 
 
 class BeitOutput(nn.Module):
     def __init__(self, config: BeitConfig) -> None:
         super().__init__()
-        self.config = config
-
-        self.dense = LoRALinear(config.intermediate_size, config.hidden_size, "output", config)
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
+
         return hidden_states
 
 
-class BeitLayer(BeitLayerAdaptersMixin, nn.Module):
+class BeitLayer(nn.Module):
     """This corresponds to the Block class in the timm implementation."""
 
     def __init__(self, config: BeitConfig, window_size: Optional[tuple] = None, drop_path_rate: float = 0.0) -> None:
         super().__init__()
-        self.config = config
-
         self.chunk_size_feed_forward = config.chunk_size_feed_forward
         self.seq_len_dim = 1
-        self.attention = BeitAttention(config, window_size=window_size, location_key="self")
+        self.attention = BeitAttention(config, window_size=window_size)
         self.intermediate = BeitIntermediate(config)
         self.output = BeitOutput(config)
         self.layernorm_before = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -406,8 +392,6 @@ class BeitLayer(BeitLayerAdaptersMixin, nn.Module):
             self.lambda_2 = nn.Parameter(init_values * torch.ones((config.hidden_size)), requires_grad=True)
         else:
             self.lambda_1, self.lambda_2 = None, None
-
-        self._init_adapter_modules()
 
     def forward(
         self,
@@ -430,21 +414,19 @@ class BeitLayer(BeitLayerAdaptersMixin, nn.Module):
             attention_output = self.lambda_1 * attention_output
 
         # first residual connection
-        hidden_states = self.attention_adapters.adapter_layer_forward(
-            self.drop_path(attention_output), hidden_states, None
-        )
+        hidden_states = self.drop_path(attention_output) + hidden_states
 
         # in BEiT, layernorm is also applied after self-attention
         layer_output = self.layernorm_after(hidden_states)
 
         layer_output = self.intermediate(layer_output)
-        layer_output = self.output(layer_output, hidden_states)
+        layer_output = self.output(layer_output)
 
         if self.lambda_2 is not None:
             layer_output = self.lambda_2 * layer_output
 
         # second residual connection
-        layer_output = self.output_adapters.adapter_layer_forward(self.drop_path(layer_output), hidden_states, None)
+        layer_output = self.drop_path(layer_output) + hidden_states
 
         outputs = (layer_output,) + outputs
 
@@ -635,7 +617,7 @@ BEIT_INPUTS_DOCSTRING = r"""
     "The bare Beit Model transformer outputting raw hidden-states without any specific head on top.",
     BEIT_START_DOCSTRING,
 )
-class BeitModel(BeitModelAdaptersMixin, BeitPreTrainedModel):
+class BeitModel(BeitPreTrainedModel):
     def __init__(self, config: BeitConfig, add_pooling_layer: bool = True) -> None:
         super().__init__(config)
         self.config = config
@@ -648,16 +630,11 @@ class BeitModel(BeitModelAdaptersMixin, BeitPreTrainedModel):
         )
         self.pooler = BeitPooler(config) if add_pooling_layer else None
 
-        self._init_adapter_modules()
-
         # Initialize weights and apply final processing
         self.post_init()
 
     def get_input_embeddings(self):
         return self.embeddings.patch_embeddings
-
-    def set_input_embeddings(self, value):
-        self.embeddings.patch_embeddings = value
 
     def _prune_heads(self, heads_to_prune):
         """
@@ -676,7 +653,6 @@ class BeitModel(BeitModelAdaptersMixin, BeitPreTrainedModel):
         modality="vision",
         expected_output=_EXPECTED_OUTPUT_SHAPE,
     )
-    @ForwardContext.wrap
     def forward(
         self,
         pixel_values: Optional[torch.Tensor] = None,
@@ -753,7 +729,7 @@ class BeitPooler(nn.Module):
     will need to use [`BeitForMaskedImageModeling`] directly if you wish to do masked image modeling with BEiT.""",
     BEIT_START_DOCSTRING,
 )
-class BeitForMaskedImageModeling(BeitModelWithHeadsAdaptersMixin, BeitPreTrainedModel):
+class BeitForMaskedImageModeling(BeitPreTrainedModel):
     def __init__(self, config: BeitConfig) -> None:
         super().__init__(config)
 
@@ -853,7 +829,7 @@ class BeitForMaskedImageModeling(BeitModelWithHeadsAdaptersMixin, BeitPreTrained
     """,
     BEIT_START_DOCSTRING,
 )
-class BeitForImageClassification(BeitModelWithHeadsAdaptersMixin, BeitPreTrainedModel):
+class BeitForImageClassification(BeitPreTrainedModel):
     def __init__(self, config: BeitConfig) -> None:
         super().__init__(config)
 
@@ -1177,7 +1153,7 @@ class BeitFCNHead(nn.Module):
     """,
     BEIT_START_DOCSTRING,
 )
-class BeitForSemanticSegmentation(ModelWithHeadsAdaptersMixin, BeitPreTrainedModel):
+class BeitForSemanticSegmentation(BeitPreTrainedModel):
     def __init__(self, config: BeitConfig) -> None:
         super().__init__(config)
 

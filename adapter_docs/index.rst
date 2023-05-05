@@ -51,14 +51,12 @@ Currently, we support the PyTorch versions of all models as listed on the `Model
    model_overview
    classes/models/auto
    classes/models/bart
-   classes/models/beit
    classes/models/bert
    classes/models/deberta
    classes/models/deberta_v2
    classes/models/distilbert
    classes/models/encoderdecoder
    classes/models/gpt2
-   classes/models/gptj
    classes/models/mbart
    classes/models/roberta
    classes/models/t5

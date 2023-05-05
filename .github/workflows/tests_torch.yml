@@ -8,7 +8,6 @@ on:
       - 'examples/**'
       - 'templates/**'
       - 'tests/**'
-      - 'tests_adapters/**'
       - 'utils/**'
   pull_request:
     branches: [ 'master', 'develop' ]
@@ -17,7 +16,6 @@ on:
       - 'examples/**'
       - 'templates/**'
       - 'tests/**'
-      - 'tests_adapters/**'
       - 'utils/**'
   workflow_dispatch:
 
@@ -35,12 +33,11 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
       - name: Install
         run: |
-          pip install torch==1.12.1
+          pip install torch
           pip install .[quality]
-      - name: Check Quality and Repo Consistency
+      - name: Check Quality
         run: |
           make quality
-          make repo-consistency
   run_reduced_tests_torch:
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -57,7 +54,7 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install
         run: |
-          pip install torch==1.12.1
+          pip install torch
           pip install .[sklearn,testing,sentencepiece,vision]
           pip install datasets
       - name: Test

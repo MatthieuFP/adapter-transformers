@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = "3.2.0a0"
+__version__ = "3.1.0"
 
 from typing import TYPE_CHECKING
 
@@ -95,7 +95,6 @@ _import_structure = {
         "BartAdapterModel",
         "BartModelWithHeads",
     ],
-    "models.beit": ["BeitAdapterModel"],
     "models.bert": [
         "BertAdapterModel",
         "BertModelWithHeads",
@@ -110,7 +109,6 @@ _import_structure = {
         "GPT2AdapterModel",
         "GPT2ModelWithHeads",
     ],
-    "models.gptj": ["GPTJAdapterModel"],
     "models.mbart": [
         "MBartAdapterModel",
         "MBartModelWithHeads",
@@ -205,13 +203,11 @@ if TYPE_CHECKING:
     )
     from .models.auto import ADAPTER_MODEL_MAPPING, MODEL_WITH_HEADS_MAPPING, AutoAdapterModel, AutoModelWithHeads
     from .models.bart import BartAdapterModel, BartModelWithHeads
-    from .models.beit import BeitAdapterModel
     from .models.bert import BertAdapterModel, BertModelWithHeads
     from .models.deberta import DebertaAdapterModel
     from .models.debertaV2 import DebertaV2AdapterModel
     from .models.distilbert import DistilBertAdapterModel, DistilBertModelWithHeads
     from .models.gpt2 import GPT2AdapterModel, GPT2ModelWithHeads
-    from .models.gptj import GPTJAdapterModel
     from .models.mbart import MBartAdapterModel, MBartModelWithHeads
     from .models.roberta import RobertaAdapterModel, RobertaModelWithHeads
     from .models.t5 import T5AdapterModel, T5ModelWithHeads

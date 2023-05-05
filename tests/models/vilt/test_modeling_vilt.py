@@ -41,9 +41,6 @@ if is_torch_available():
         ViltModel,
     )
     from transformers.models.vilt.modeling_vilt import VILT_PRETRAINED_MODEL_ARCHIVE_LIST
-    from transformers.pytorch_utils import is_torch_greater_or_equal_than_1_10
-else:
-    is_torch_greater_or_equal_than_1_10 = False
 
 if is_vision_available():
     import PIL
@@ -217,8 +214,8 @@ class ViltModelTester:
 
 
 @require_torch
-@unittest.skipIf(not is_torch_greater_or_equal_than_1_10, "Vilt is only available in torch v1.10+")
 class ViltModelTest(ModelTesterMixin, unittest.TestCase):
+
     all_model_classes = (
         (
             ViltModel,
@@ -514,8 +511,8 @@ class ViltModelTest(ModelTesterMixin, unittest.TestCase):
 
 
 @require_torch
-@unittest.skipIf(not is_torch_greater_or_equal_than_1_10, "Vilt is only available in torch v1.10+")
 class ViltForImagesAndTextClassificationModelTest(ViltModelTest, unittest.TestCase):
+
     all_model_classes = (ViltForImagesAndTextClassification,) if is_torch_available() else ()
 
     def setUp(self):
@@ -539,7 +536,6 @@ def prepare_img():
 
 @require_torch
 @require_vision
-@unittest.skipIf(not is_torch_greater_or_equal_than_1_10, "Vilt is only available in torch v1.10+")
 class ViltModelIntegrationTest(unittest.TestCase):
     @cached_property
     def default_processor(self):

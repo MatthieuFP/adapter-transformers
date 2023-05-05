@@ -43,10 +43,7 @@ cd ..
 Having downloaded COCO dataset manually you should be able to load with the `ydshieh/coc_dataset_script` dataset loading script:
 
 ```py
-import os
-import datasets
-
-COCO_DIR = os.path.join(os.getcwd(), "data")
+COCO_DIR = "data"
 ds = datasets.load_dataset("ydshieh/coco_dataset_script", "2017", data_dir=COCO_DIR)
 ```
 
@@ -87,7 +84,7 @@ Finally, we can run the example script to train the model:
 python examples/pytorch/contrastive-image-text/run_clip.py \
     --output_dir ./clip-roberta-finetuned \
     --model_name_or_path ./clip-roberta \
-    --data_dir $PWD/data \
+    --data_dir ./data \
     --dataset_name ydshieh/coco_dataset_script \
     --dataset_config_name=2017 \
     --image_column image_path \

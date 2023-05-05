@@ -852,7 +852,6 @@ class TFDeiTForMaskedImageModeling(TFDeiTPreTrainedModel):
             total_loss = tf.reduce_sum(reconstruction_loss * mask)
             num_masked_pixels = (tf.reduce_sum(mask) + 1e-5) * self.config.num_channels
             masked_im_loss = total_loss / num_masked_pixels
-            masked_im_loss = tf.reshape(masked_im_loss, (1,))
 
         if not return_dict:
             output = (reconstructed_pixel_values,) + outputs[1:]
@@ -922,7 +921,7 @@ class TFDeiTForImageClassification(TFDeiTPreTrainedModel, TFSequenceClassificati
         >>> from PIL import Image
         >>> import requests
 
-        >>> tf.keras.utils.set_random_seed(3)  # doctest: +IGNORE_RESULT
+        >>> tf.random.set_seed(3)  # doctest: +IGNORE_RESULT
         >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
         >>> image = Image.open(requests.get(url, stream=True).raw)
 
@@ -935,9 +934,9 @@ class TFDeiTForImageClassification(TFDeiTPreTrainedModel, TFSequenceClassificati
         >>> outputs = model(**inputs)
         >>> logits = outputs.logits
         >>> # model predicts one of the 1000 ImageNet classes
-        >>> predicted_class_idx = tf.math.argmax(logits, axis=-1)[0]
-        >>> print("Predicted class:", model.config.id2label[int(predicted_class_idx)])
-        Predicted class: little blue heron, Egretta caerulea
+        >>> predicted_class_idx = logits.argmax(-1).item()
+        >>> print("Predicted class:", model.config.id2label[predicted_class_idx])
+        Predicted class: maillot
         ```"""
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 

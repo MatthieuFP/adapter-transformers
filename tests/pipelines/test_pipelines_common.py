@@ -37,6 +37,8 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     DistilBertForSequenceClassification,
+    IBertConfig,
+    RobertaConfig,
     TextClassificationPipeline,
     TFAutoModelForSequenceClassification,
     pipeline,
@@ -47,14 +49,13 @@ from transformers.testing_utils import (
     TOKEN,
     USER,
     CaptureLogger,
-    RequestCounter,
+    is_pipeline_test,
     is_staging_test,
     nested_simplify,
     require_scatter,
     require_tensorflow_probability,
     require_tf,
     require_torch,
-    require_torch_or_tf,
     slow,
 )
 from transformers.utils import is_tf_available, is_torch_available
@@ -67,16 +68,6 @@ from test_module.custom_pipeline import PairClassificationPipeline  # noqa E402
 
 
 logger = logging.getLogger(__name__)
-
-
-ROBERTA_EMBEDDING_ADJUSMENT_CONFIGS = [
-    "CamembertConfig",
-    "IBertConfig",
-    "LongformerConfig",
-    "MarkupLMConfig",
-    "RobertaConfig",
-    "XLMRobertaConfig",
-]
 
 
 def get_checkpoint_from_architecture(architecture):
@@ -178,16 +169,8 @@ class ANY:
 class PipelineTestCaseMeta(type):
     def __new__(mcs, name, bases, dct):
         def gen_test(ModelClass, checkpoint, tiny_config, tokenizer_class, feature_extractor_class):
-            @skipIf(
-                tiny_config is None,
-                "TinyConfig does not exist, make sure that you defined a `_CONFIG_FOR_DOC` variable in the modeling"
-                " file",
-            )
-            @skipIf(
-                checkpoint is None,
-                "checkpoint does not exist, make sure that you defined a `_CHECKPOINT_FOR_DOC` variable in the"
-                " modeling file",
-            )
+            @skipIf(tiny_config is None, "TinyConfig does not exist")
+            @skipIf(checkpoint is None, "checkpoint does not exist")
             def test(self):
                 if ModelClass.__name__.endswith("ForCausalLM"):
                     tiny_config.is_encoder_decoder = False
@@ -210,7 +193,7 @@ class PipelineTestCaseMeta(type):
                     try:
                         tokenizer = get_tiny_tokenizer_from_checkpoint(checkpoint)
                         # XLNet actually defines it as -1.
-                        if model.config.__class__.__name__ in ROBERTA_EMBEDDING_ADJUSMENT_CONFIGS:
+                        if isinstance(model.config, (RobertaConfig, IBertConfig)):
                             tokenizer.model_max_length = model.config.max_position_embeddings - 2
                         elif (
                             hasattr(model.config, "max_position_embeddings")
@@ -315,6 +298,7 @@ class PipelineTestCaseMeta(type):
         return type.__new__(mcs, name, bases, dct)
 
 
+@is_pipeline_test
 class CommonPipelineTest(unittest.TestCase):
     @require_torch
     def test_pipeline_iteration(self):
@@ -423,56 +407,7 @@ class CommonPipelineTest(unittest.TestCase):
         self.assertEqual(len(outputs), 20)
 
 
-class PipelineScikitCompatTest(unittest.TestCase):
-    @require_torch
-    def test_pipeline_predict_pt(self):
-        data = ["This is a test"]
-
-        text_classifier = pipeline(
-            task="text-classification", model="hf-internal-testing/tiny-random-distilbert", framework="pt"
-        )
-
-        expected_output = [{"label": ANY(str), "score": ANY(float)}]
-        actual_output = text_classifier.predict(data)
-        self.assertEqual(expected_output, actual_output)
-
-    @require_tf
-    def test_pipeline_predict_tf(self):
-        data = ["This is a test"]
-
-        text_classifier = pipeline(
-            task="text-classification", model="hf-internal-testing/tiny-random-distilbert", framework="tf"
-        )
-
-        expected_output = [{"label": ANY(str), "score": ANY(float)}]
-        actual_output = text_classifier.predict(data)
-        self.assertEqual(expected_output, actual_output)
-
-    @require_torch
-    def test_pipeline_transform_pt(self):
-        data = ["This is a test"]
-
-        text_classifier = pipeline(
-            task="text-classification", model="hf-internal-testing/tiny-random-distilbert", framework="pt"
-        )
-
-        expected_output = [{"label": ANY(str), "score": ANY(float)}]
-        actual_output = text_classifier.transform(data)
-        self.assertEqual(expected_output, actual_output)
-
-    @require_tf
-    def test_pipeline_transform_tf(self):
-        data = ["This is a test"]
-
-        text_classifier = pipeline(
-            task="text-classification", model="hf-internal-testing/tiny-random-distilbert", framework="tf"
-        )
-
-        expected_output = [{"label": ANY(str), "score": ANY(float)}]
-        actual_output = text_classifier.transform(data)
-        self.assertEqual(expected_output, actual_output)
-
-
+@is_pipeline_test
 class PipelinePadTest(unittest.TestCase):
     @require_torch
     def test_pipeline_padding(self):
@@ -554,6 +489,7 @@ class PipelinePadTest(unittest.TestCase):
         )
 
 
+@is_pipeline_test
 class PipelineUtilsTest(unittest.TestCase):
     @require_torch
     def test_pipeline_dataset(self):
@@ -850,6 +786,7 @@ class CustomPipeline(Pipeline):
         return model_outputs["logits"].softmax(-1).numpy()
 
 
+@is_pipeline_test
 class CustomPipelineTest(unittest.TestCase):
     def test_warning_logs(self):
         transformers_logging.set_verbosity_debug()
@@ -858,7 +795,7 @@ class CustomPipelineTest(unittest.TestCase):
         alias = "text-classification"
         # Get the original task, so we can restore it at the end.
         # (otherwise the subsequential tests in `TextClassificationPipelineTests` will fail)
-        _, original_task, _ = PIPELINE_REGISTRY.check_task(alias)
+        original_task, original_task_options = PIPELINE_REGISTRY.check_task(alias)
 
         try:
             with CaptureLogger(logger_) as cm:
@@ -879,7 +816,7 @@ class CustomPipelineTest(unittest.TestCase):
         )
         assert "custom-text-classification" in PIPELINE_REGISTRY.get_supported_tasks()
 
-        _, task_def, _ = PIPELINE_REGISTRY.check_task("custom-text-classification")
+        task_def, _ = PIPELINE_REGISTRY.check_task("custom-text-classification")
         self.assertEqual(task_def["pt"], (AutoModelForSequenceClassification,) if is_torch_available() else ())
         self.assertEqual(task_def["tf"], (TFAutoModelForSequenceClassification,) if is_tf_available() else ())
         self.assertEqual(task_def["type"], "text")
@@ -889,7 +826,6 @@ class CustomPipelineTest(unittest.TestCase):
         # Clean registry for next tests.
         del PIPELINE_REGISTRY.supported_tasks["custom-text-classification"]
 
-    @require_torch_or_tf
     def test_dynamic_pipeline(self):
         PIPELINE_REGISTRY.register_pipeline(
             "pair-classification",
@@ -940,16 +876,6 @@ class CustomPipelineTest(unittest.TestCase):
             nested_simplify(results),
             [{"label": "LABEL_0", "score": 0.505}],
         )
-
-    @require_torch_or_tf
-    def test_cached_pipeline_has_minimum_calls_to_head(self):
-        # Make sure we have cached the pipeline.
-        _ = pipeline("text-classification", model="hf-internal-testing/tiny-random-bert")
-        with RequestCounter() as counter:
-            _ = pipeline("text-classification", model="hf-internal-testing/tiny-random-bert")
-            self.assertEqual(counter.get_request_count, 0)
-            self.assertEqual(counter.head_request_count, 1)
-            self.assertEqual(counter.other_request_count, 0)
 
 
 @require_torch

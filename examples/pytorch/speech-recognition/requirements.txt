@@ -3,4 +3,3 @@ torch >= 1.5
 torchaudio
 librosa
 jiwer
-evaluate

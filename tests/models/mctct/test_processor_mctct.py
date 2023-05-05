@@ -125,7 +125,8 @@ class MCTCTProcessorTest(unittest.TestCase):
 
         input_str = "This is a test string"
 
-        encoded_processor = processor(text=input_str)
+        with processor.as_target_processor():
+            encoded_processor = processor(input_str)
 
         encoded_tok = tokenizer(input_str)
 

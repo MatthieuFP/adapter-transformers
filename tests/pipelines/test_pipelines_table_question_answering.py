@@ -23,6 +23,7 @@ from transformers import (
     pipeline,
 )
 from transformers.testing_utils import (
+    is_pipeline_test,
     require_pandas,
     require_tensorflow_probability,
     require_tf,
@@ -34,6 +35,7 @@ from transformers.testing_utils import (
 from .test_pipelines_common import PipelineTestCaseMeta
 
 
+@is_pipeline_test
 class TQAPipelineTests(unittest.TestCase, metaclass=PipelineTestCaseMeta):
     # Putting it there for consistency, but TQA do not have fast tokenizer
     # which are needed to generate automatic tests

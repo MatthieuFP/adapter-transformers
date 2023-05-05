@@ -19,8 +19,6 @@ from typing import Optional, Union
 import numpy as np
 from PIL import Image
 
-from transformers.image_utils import PILImageResampling
-
 from ...feature_extraction_utils import BatchFeature, FeatureExtractionMixin
 from ...image_utils import (
     IMAGENET_DEFAULT_MEAN,
@@ -54,11 +52,10 @@ class PerceiverFeatureExtractor(FeatureExtractionMixin, ImageFeatureExtractionMi
             Resize the input to the given size. If a tuple is provided, it should be (width, height). If only an
             integer is provided, then the input will be resized to (size, size). Only has an effect if `do_resize` is
             set to `True`.
-        resample (`int`, *optional*, defaults to `PIL.Image.Resampling.BICUBIC`):
-            An optional resampling filter. This can be one of `PIL.Image.Resampling.NEAREST`,
-            `PIL.Image.Resampling.BOX`, `PIL.Image.Resampling.BILINEAR`, `PIL.Image.Resampling.HAMMING`,
-            `PIL.Image.Resampling.BICUBIC` or `PIL.Image.Resampling.LANCZOS`. Only has an effect if `do_resize` is set
-            to `True`.
+        resample (`int`, *optional*, defaults to `PIL.Image.BICUBIC`):
+            An optional resampling filter. This can be one of `PIL.Image.NEAREST`, `PIL.Image.BOX`,
+            `PIL.Image.BILINEAR`, `PIL.Image.HAMMING`, `PIL.Image.BICUBIC` or `PIL.Image.LANCZOS`. Only has an effect
+            if `do_resize` is set to `True`.
         do_normalize (`bool`, *optional*, defaults to `True`):
             Whether or not to normalize the input with `image_mean` and `image_std`.
         image_mean (`List[int]`, defaults to `[0.485, 0.456, 0.406]`):
@@ -75,7 +72,7 @@ class PerceiverFeatureExtractor(FeatureExtractionMixin, ImageFeatureExtractionMi
         crop_size=256,
         do_resize=True,
         size=224,
-        resample=PILImageResampling.BICUBIC,
+        resample=Image.BICUBIC,
         do_normalize=True,
         image_mean=None,
         image_std=None,

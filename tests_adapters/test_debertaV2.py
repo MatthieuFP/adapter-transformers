@@ -4,14 +4,7 @@ from tests.models.deberta_v2.test_modeling_deberta_v2 import *
 from transformers import DebertaV2AdapterModel
 from transformers.testing_utils import require_torch
 
-from .methods import (
-    BottleneckAdapterTestMixin,
-    CompacterTestMixin,
-    IA3TestMixin,
-    LoRATestMixin,
-    PrefixTuningTestMixin,
-    UniPELTTestMixin,
-)
+from .methods import BottleneckAdapterTestMixin, UniPELTTestMixin, CompacterTestMixin, IA3TestMixin, LoRATestMixin, PrefixTuningTestMixin
 from .test_adapter import AdapterTestBase, make_config
 from .test_adapter_backward_compability import CompabilityTestMixin
 from .test_adapter_composition import ParallelAdapterInferenceTestMixin, ParallelTrainingMixin
@@ -39,8 +32,6 @@ class DebertaV2AdapterTestBase(AdapterTestBase):
         num_attention_heads=4,
         intermediate_size=37,
         hidden_act="gelu",
-        relative_attention=True,
-        pos_att_type="p2c|c2p",
     )
     tokenizer_name = "microsoft/deberta-v3-base"
 

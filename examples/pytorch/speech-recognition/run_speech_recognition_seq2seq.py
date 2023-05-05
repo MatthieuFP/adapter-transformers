@@ -27,9 +27,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import datasets
 import torch
-from datasets import DatasetDict, load_dataset
+from datasets import DatasetDict, load_dataset, load_metric
 
-import evaluate
 import transformers
 from transformers import (
     AutoConfig,
@@ -48,7 +47,7 @@ from transformers.utils.versions import require_version
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.24.0")
+check_min_version("4.21.0")
 
 require_version("datasets>=1.18.0", "To fix: pip install -r examples/pytorch/speech-recognition/requirements.txt")
 
@@ -89,7 +88,7 @@ class ModelArguments:
         default=False,
         metadata={
             "help": (
-                "Will use the token generated when running `huggingface-cli login` (necessary to use this script "
+                "Will use the token generated when running `transformers-cli login` (necessary to use this script "
                 "with private models)."
             )
         },
@@ -195,7 +194,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     Data collator that will dynamically pad the inputs received.
     Args:
         processor ([`Wav2Vec2Processor`])
-            The processor used for processing the data.
+            The processor used for proccessing the data.
         decoder_start_token_id (`int`)
             The begin-of-sentence of the decoder.
     """
@@ -204,7 +203,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     decoder_start_token_id: int
 
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        # split inputs and labels since they have to be of different lengths and need
+        # split inputs and labels since they have to be of different lenghts and need
         # different padding methods
         input_features = [{"input_values": feature["input_values"]} for feature in features]
         label_features = [{"input_ids": feature["labels"]} for feature in features]
@@ -271,7 +270,7 @@ def main():
         transformers.utils.logging.set_verbosity_info()
     logger.info("Training/evaluation parameters %s", training_args)
 
-    # 3. Detecting last checkpoint and eventually continue from last checkpoint
+    # 3. Detecting last checkpoint and eventualy continue from last checkpoint
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
@@ -360,7 +359,7 @@ def main():
     if model_args.freeze_feature_encoder:
         model.freeze_feature_encoder()
 
-    # 6. Resample speech dataset if necessary
+    # 6. Resample speech dataset if necassary
     dataset_sampling_rate = next(iter(raw_datasets.values())).features[data_args.audio_column_name].sampling_rate
     if dataset_sampling_rate != feature_extractor.sampling_rate:
         raw_datasets = raw_datasets.cast_column(
@@ -426,7 +425,7 @@ def main():
         return
 
     # 8. Load Metric
-    metric = evaluate.load("wer")
+    metric = load_metric("wer")
 
     def compute_metrics(pred):
         pred_ids = pred.predictions
@@ -503,7 +502,7 @@ def main():
         trainer.save_metrics("eval", metrics)
 
     # 14. Write Training Stats
-    kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "automatic-speech-recognition"}
+    kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "speech recognition"}
     if data_args.dataset_name is not None:
         kwargs["dataset_tags"] = data_args.dataset_name
         if data_args.dataset_config_name is not None:
